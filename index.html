@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Duka - Shop Management</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="manifest" href="manifest.json" />
+</head>
+<body class="dark">
+
+  <!-- ========== TOP BAR - CENTERED ========== -->
+  <header>
+    <div class="header-top centered">
+      <div class="header-center">
+        <h1>Smart Duka</h1>
+        <p class="subtitle">Shop Management for Kibandas &amp; Kiosks</p>
+        <p id="today-date">Today</p>
+      </div>
+      <button id="theme-btn" onclick="toggleTheme()">Light Mode</button>
+    </div>
+
+    <!-- GLOBAL SEARCH - SEARCH ANYTHING -->
+    <div class="global-search-wrap">
+      <input type="text" id="global-search" placeholder="Search anything... product, customer, deni, loan..." autocomplete="off" />
+      <button id="global-search-clear" onclick="clearGlobalSearch()" title="Clear search">X</button>
+      <div id="global-results" class="global-results hidden"></div>
+    </div>
+  </header>
+
+  <!-- ========== NAVIGATION ========== -->
+  <nav>
+    <button data-screen="screen-dashboard" onclick="showScreen('screen-dashboard')" class="nav-active">Home</button>
+    <button data-screen="screen-sales" onclick="showScreen('screen-sales')">Sell</button>
+    <button data-screen="screen-products" onclick="showScreen('screen-products')">Stock</button>
+    <button data-screen="screen-debts" onclick="showScreen('screen-debts')">Deni</button>
+    <button data-screen="screen-loans" onclick="showScreen('screen-loans')">Loans</button>
+    <button data-screen="screen-expenses" onclick="showScreen('screen-expenses')">Expenses</button>
+    <button data-screen="screen-reports" onclick="showScreen('screen-reports')">Reports</button>
+    <button data-screen="screen-backup" onclick="showScreen('screen-backup')">Backup</button>
+  </nav>
+
+  <main>
+
+    <!-- 1. DASHBOARD -->
+    <section id="screen-dashboard" class="screen active">
+      <h2 id="greeting">Good evening. How is business today?</h2>
+      <p class="muted">Here is a quick look at your shop today.</p>
+
+      <div class="cards">
+        <div class="card green">
+          <span>Money Made Today (Sales)</span>
+          <strong id="dash-sales-today">KSh 0</strong>
+          <small id="dash-sales-count">0 sales today</small>
+        </div>
+        <div class="card blue">
+          <span>Cash + M-Pesa Collected</span>
+          <strong id="dash-collected">KSh 0</strong>
+          <small>Cash: <span id="dash-cash">KSh 0</span> | M-Pesa: <span id="dash-mpesa">KSh 0</span></small>
+        </div>
+        <div class="card orange">
+          <span>Expenses Today</span>
+          <strong id="dash-expenses">KSh 0</strong>
+          <small id="dash-expense-count">0 expenses</small>
+        </div>
+        <div class="card purple">
+          <span>Profit Today (Gross)</span>
+          <strong id="dash-profit">KSh 0</strong>
+          <small>Sales - Cost of goods</small>
+        </div>
+      </div>
+
+      <div class="cards">
+        <div class="card">
+          <span>Total Products</span>
+          <strong id="dash-products">0</strong>
+        </div>
+        <div class="card">
+          <span>Value of Stock in Shop</span>
+          <strong id="dash-stock-value">KSh 0</strong>
+        </div>
+        <div class="card red">
+          <span>People Owe Me (Deni)</span>
+          <strong id="dash-debts">KSh 0</strong>
+        </div>
+        <div class="card">
+          <span>Loans I Gave Out</span>
+          <strong id="dash-loans-out">KSh 0</strong>
+          <small>Loans I Took: <span id="dash-loans-in">KSh 0</span></small>
+        </div>
+      </div>
+
+      <h3>Low Stock — Buy Soon</h3>
+      <div id="low-stock-list">
+        <p class="muted">No low stock. Good!</p>
+      </div>
+
+      <h3>Recent Sales</h3>
+      <div id="recent-sales-list">
+        <p class="muted">No sales yet today. Press "Sell" to record your first sale.</p>
+      </div>
+
+      <button class="btn-primary" onclick="showScreen('screen-sales')">Record New Sale</button>
+      <button class="btn-secondary" onclick="showScreen('screen-reports')">Close Day</button>
+
+      <div class="quick-actions">
+        <button onclick="showScreen('screen-sales')">Sell</button>
+        <button onclick="showScreen('screen-products')">Add Stock</button>
+        <button onclick="showScreen('screen-expenses')">Add Expense</button>
+        <button onclick="showScreen('screen-debts')">Record Deni</button>
+      </div>
+      <p class="muted center">Quick actions - tap to go straight to the task.</p>
+    </section>
+
+    <!-- 2. SALES -->
+    <section id="screen-sales" class="screen">
+      <h2>Record a Sale</h2>
+      <p class="muted">Add products to this sale. Stock will reduce automatically.</p>
+
+      <form id="sale-form">
+        <label>Choose Product
+          <select id="sale-product" required>
+            <option value="">-- Choose product --</option>
+          </select>
+        </label>
+
+        <div class="row">
+          <label>How many?
+            <input type="number" id="sale-qty" min="1" value="1" required />
+          </label>
+          <label>Price each (KSh)
+            <input type="number" id="sale-price" min="0" step="0.01" required />
+          </label>
+        </div>
+
+        <button type="button" class="btn-secondary" id="add-to-sale-btn">Add to Sale</button>
+
+        <h3>Items in this sale</h3>
+        <table>
+          <thead>
+            <tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th><th></th></tr>
+          </thead>
+          <tbody id="sale-items-body">
+            <tr><td colspan="5" class="muted">No items yet. Add a product above.</td></tr>
+          </tbody>
+        </table>
+
+        <p class="total-line">Total: <strong id="sale-total">KSh 0</strong></p>
+
+        <label>How did customer pay?
+          <select id="sale-payment">
+            <option value="Cash">Cash</option>
+            <option value="M-Pesa">M-Pesa</option>
+            <option value="Credit">Credit / Deni (Pay Later)</option>
+            <option value="Cash+M-Pesa">Cash + M-Pesa</option>
+          </select>
+        </label>
+
+        <label>Customer Name (only if Credit / Deni)
+          <input type="text" id="sale-customer" placeholder="e.g. Wanjiru" />
+        </label>
+
+        <label>Customer Phone (optional)
+          <input type="tel" id="sale-phone" placeholder="e.g. 0712345678" />
+        </label>
+
+        <label>Amount customer paid now (KSh)
+          <input type="number" id="sale-paid" min="0" step="0.01" value="0" />
+          <small class="muted">If they pay less than total, the rest becomes Deni automatically.</small>
+        </label>
+
+        <button type="submit" class="btn-primary">Save Sale</button>
+        <button type="button" class="btn-danger-outline" id="clear-sale-btn">Clear Sale</button>
+      </form>
+
+      <hr />
+      <h3>Search Sales History</h3>
+      <input type="text" id="search-sales" placeholder="Search by product or customer..." />
+      <label>Filter by date
+        <input type="date" id="filter-sales-date" />
+      </label>
+      <div id="sales-history-list">
+        <p class="muted">No sales yet.</p>
+      </div>
+    </section>
+
+    <!-- 3. PRODUCTS / STOCK -->
+    <section id="screen-products" class="screen">
+      <h2>My Stock / Products</h2>
+
+      <form id="product-form">
+        <label>Product Name *
+          <input type="text" id="prod-name" placeholder="e.g. Oranges, Soda, Bread" required />
+        </label>
+
+        <label>Category
+          <select id="prod-category">
+            <option value="General">General</option>
+            <option value="Fruits">Fruits</option>
+            <option value="Vegetables">Vegetables</option>
+            <option value="Drinks">Drinks</option>
+            <option value="Food">Food</option>
+            <option value="Household">Household</option>
+            <option value="Other">Other</option>
+          </select>
+        </label>
+
+        <div class="row">
+          <label>Quantity in Stock *
+            <input type="number" id="prod-qty" min="0" value="0" required />
+          </label>
+          <label>Buying Price (KSh) *
+            <input type="number" id="prod-buying" min="0" step="0.01" required />
+          </label>
+          <label>Selling Price (KSh) *
+            <input type="number" id="prod-selling" min="0" step="0.01" required />
+          </label>
+        </div>
+
+        <label>Warn me when stock goes below (Low Stock Level)
+          <input type="number" id="prod-low" min="0" value="5" />
+        </label>
+
+        <button type="submit" class="btn-primary">Add Product</button>
+      </form>
+
+      <hr />
+
+      <div class="row">
+        <input type="text" id="search-products" placeholder="Search product..." />
+        <select id="filter-category">
+          <option value="">All Categories</option>
+          <option value="Fruits">Fruits</option>
+          <option value="Drinks">Drinks</option>
+          <option value="Food">Food</option>
+          <option value="Household">Household</option>
+        </select>
+      </div>
+
+      <p>Total Stock Value: <strong id="stock-value-total">KSh 0</strong></p>
+
+      <table>
+        <thead>
+          <tr><th>Product</th><th>Qty</th><th>Buy</th><th>Sell</th><th>Value</th><th></th></tr>
+        </thead>
+        <tbody id="products-body">
+          <tr><td colspan="6" class="muted">No products yet. Add your first product above.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Adjust Stock (Damage / Lost / Restock)</h3>
+      <form id="adjust-form">
+        <label>Product
+          <select id="adjust-product"><option value="">-- Choose --</option></select>
+        </label>
+        <label>Type
+          <select id="adjust-type">
+            <option value="restock">Restock (+ Add Stock)</option>
+            <option value="damaged">Damaged / Spoiled (- Remove)</option>
+            <option value="lost">Lost / Stolen (- Remove)</option>
+            <option value="correction">Correction (Count was wrong)</option>
+          </select>
+        </label>
+        <label>Quantity
+          <input type="number" id="adjust-qty" min="1" value="1" />
+        </label>
+        <label>Reason / Note
+          <input type="text" id="adjust-note" placeholder="e.g. 5 oranges rotten" />
+        </label>
+        <button type="submit" class="btn-secondary">Save Adjustment</button>
+      </form>
+    </section>
+
+    <!-- 4. DEBTS -->
+    <section id="screen-debts" class="screen">
+      <h2>People Who Owe Me (Deni)</h2>
+      <p class="muted">When a customer buys on credit, it appears here automatically. When they pay, record it here — it is NOT a new sale.</p>
+
+      <div class="cards">
+        <div class="card red"><span>Total Deni Owed To Me</span><strong id="debts-total">KSh 0</strong></div>
+        <div class="card"><span>Fully Paid Debts</span><strong id="debts-paid-count">0</strong></div>
+        <div class="card"><span>Still Owing</span><strong id="debts-owing-count">0</strong></div>
+      </div>
+
+      <form id="debt-form">
+        <h3>Add Deni Manually (if you forgot to record sale)</h3>
+        <label>Customer Name *
+          <input type="text" id="debt-name" placeholder="e.g. Kamau" required />
+        </label>
+        <label>Phone (optional)
+          <input type="tel" id="debt-phone" placeholder="071..." />
+        </label>
+        <label>What did they take?
+          <input type="text" id="debt-items" placeholder="e.g. 2 Bread, 1 Soda" />
+        </label>
+        <label>Amount Owed (KSh) *
+          <input type="number" id="debt-amount" min="0" step="0.01" required />
+        </label>
+        <label>Date
+          <input type="date" id="debt-date" />
+        </label>
+        <button type="submit" class="btn-primary">Save Deni</button>
+      </form>
+
+      <hr />
+      <input type="text" id="search-debts" placeholder="Search customer name..." />
+      <div id="debts-list"><p class="muted">No debts yet.</p></div>
+
+      <div id="pay-debt-box" class="hidden-box">
+        <h3>Record Payment for <span id="pay-debt-name"></span></h3>
+        <label>Amount Paid Now (KSh)
+          <input type="number" id="pay-debt-amount" min="0" step="0.01" />
+        </label>
+        <label>How did they pay?
+          <select id="pay-debt-method"><option>Cash</option><option>M-Pesa</option></select>
+        </label>
+        <button class="btn-primary" id="confirm-pay-debt-btn">Save Payment</button>
+        <button class="btn-secondary" id="cancel-pay-debt-btn">Cancel</button>
+      </div>
+    </section>
+
+    <!-- 5. LOANS -->
+    <section id="screen-loans" class="screen">
+      <h2>Loans</h2>
+      <p class="muted">Note: Loans are NOT sales. Loans given out are NOT expenses. Loans received are NOT revenue. We keep them separate.</p>
+
+      <div class="cards">
+        <div class="card"><span>Loans I Gave Out (People owe me)</span><strong id="loans-out-total">KSh 0</strong></div>
+        <div class="card"><span>Loans I Took (I owe others)</span><strong id="loans-in-total">KSh 0</strong></div>
+      </div>
+
+      <form id="loan-form">
+        <label>Type *
+          <select id="loan-type">
+            <option value="given">I Gave Out a Loan (Someone owes me)</option>
+            <option value="received">I Received a Loan (I owe someone)</option>
+          </select>
+        </label>
+        <label>Person Name *
+          <input type="text" id="loan-person" placeholder="e.g. Otis / Chama / Supplier" required />
+        </label>
+        <label>Phone (optional)
+          <input type="tel" id="loan-phone" />
+        </label>
+        <div class="row">
+          <label>Loan Amount (KSh) *
+            <input type="number" id="loan-amount" min="0" step="0.01" required />
+          </label>
+          <label>Date Given / Received
+            <input type="date" id="loan-date" />
+          </label>
+          <label>Due Date (When to repay)
+            <input type="date" id="loan-due" />
+          </label>
+        </div>
+        <label>Note
+          <input type="text" id="loan-note" placeholder="e.g. For stock, to be repaid in 2 weeks" />
+        </label>
+        <button type="submit" class="btn-primary">Save Loan</button>
+      </form>
+
+      <hr />
+      <input type="text" id="search-loans" placeholder="Search person..." />
+      <div id="loans-list"><p class="muted">No loans yet.</p></div>
+    </section>
+
+    <!-- 6. EXPENSES -->
+    <section id="screen-expenses" class="screen">
+      <h2>Expenses</h2>
+      <p class="muted">Money you spend to run the shop. This reduces your Net Profit.</p>
+
+      <div class="cards">
+        <div class="card orange"><span>Expenses Today</span><strong id="expenses-today">KSh 0</strong></div>
+        <div class="card"><span>Expenses This Month</span><strong id="expenses-month">KSh 0</strong></div>
+      </div>
+
+      <form id="expense-form">
+        <label>Type *
+          <select id="expense-type">
+            <option value="Transport">Transport</option>
+            <option value="Rent">Rent</option>
+            <option value="Electricity">Electricity / Tokens</option>
+            <option value="Restocking">Shopping / Restocking</option>
+            <option value="Employee">Employee Payment</option>
+            <option value="Airtime">Airtime / Bundles</option>
+            <option value="Other">Other</option>
+          </select>
+        </label>
+        <label>What was it for?
+          <input type="text" id="expense-desc" placeholder="e.g. Transport to Marikiti" />
+        </label>
+        <label>Amount (KSh) *
+          <input type="number" id="expense-amount" min="0" step="0.01" required />
+        </label>
+        <label>Date
+          <input type="date" id="expense-date" />
+        </label>
+        <button type="submit" class="btn-primary">Save Expense</button>
+      </form>
+
+      <hr />
+      <div id="expenses-list"><p class="muted">No expenses yet.</p></div>
+    </section>
+
+    <!-- 7. REPORTS / DAILY CLOSING -->
+    <section id="screen-reports" class="screen">
+      <h2>Reports &amp; Daily Closing</h2>
+
+      <div class="row">
+        <label>From Date <input type="date" id="report-from" /></label>
+        <label>To Date <input type="date" id="report-to" /></label>
+        <button class="btn-secondary" id="report-filter-btn">Show Report</button>
+        <button class="btn-secondary" id="report-today-btn">Today</button>
+        <button class="btn-secondary" id="report-week-btn">This Week</button>
+        <button class="btn-secondary" id="report-month-btn">This Month</button>
+      </div>
+
+      <div class="cards">
+        <div class="card green"><span>Sales Revenue</span><strong id="report-revenue">KSh 0</strong></div>
+        <div class="card"><span>Cost of Goods (COGS)</span><strong id="report-cogs">KSh 0</strong></div>
+        <div class="card purple"><span>Gross Profit</span><strong id="report-gross">KSh 0</strong></div>
+        <div class="card orange"><span>Expenses</span><strong id="report-expenses">KSh 0</strong></div>
+        <div class="card blue"><span>Net Profit</span><strong id="report-net">KSh 0</strong></div>
+      </div>
+      <p class="muted">Formula: Gross Profit = Revenue - COGS | Net Profit = Gross Profit - Expenses</p>
+
+      <hr />
+      <h3>Daily Closing — Count Your Stock</h3>
+      <p class="muted">1. Check sales. 2. Count what is left in shop. 3. Enter counted stock. App will show missing / excess.</p>
+
+      <div id="closing-list">
+        <p class="muted">Add products first, then do closing here.</p>
+      </div>
+
+      <div class="row">
+        <label>Cash Counted in Drawer (KSh)
+          <input type="number" id="closing-cash" min="0" step="0.01" value="0" />
+        </label>
+        <label>M-Pesa Balance Counted (KSh)
+          <input type="number" id="closing-mpesa" min="0" step="0.01" value="0" />
+        </label>
+      </div>
+
+      <label>Closing Notes
+        <textarea id="closing-notes" rows="2" placeholder="e.g. 5 oranges spoiled, explained..."></textarea>
+      </label>
+
+      <button class="btn-primary" id="close-day-btn">Close Day &amp; Save Report</button>
+      <div id="closed-days-list"><p class="muted">No closed days yet.</p></div>
+    </section>
+
+    <!-- 8. BACKUP -->
+    <section id="screen-backup" class="screen">
+      <h2>Backup &amp; Restore</h2>
+      <p class="muted">Your data is saved on this phone. Backup protects you if phone is lost or broken.</p>
+
+      <div class="card red">
+        <span>Backup Status</span>
+        <strong id="backup-status">Never backed up</strong>
+        <small>Last backup: <span id="backup-last">Never</span></small>
+      </div>
+
+      <h3>Export Backup</h3>
+      <button class="btn-primary" id="export-json-btn">Download Backup (JSON) — Full Data</button>
+      <button class="btn-secondary" id="export-csv-btn">Download Sales Report (CSV) — For Excel</button>
+      <p class="muted">Save the downloaded file to Flash Drive, Memory Card, WhatsApp to yourself, or Google Drive. That is your backup.</p>
+
+      <h3>Import Backup</h3>
+      <label>Choose backup file (.json)
+        <input type="file" id="import-file" accept=".json" />
+      </label>
+      <button class="btn-secondary" id="import-btn">Restore From File</button>
+      <p class="muted">Restoring will replace current data. Make a backup first.</p>
+
+      <h3>Danger Zone</h3>
+      <button class="btn-danger" id="clear-all-btn">Delete ALL Data (Need Confirmation)</button>
+      <p class="muted">This deletes everything. You will be asked to type DELETE to confirm.</p>
+
+      <h3>Activity Log (Audit Trail)</h3>
+      <div id="audit-list"><p class="muted">No activity yet.</p></div>
+    </section>
+
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <div id="confirm-box" class="hidden">
+    <p id="confirm-text">Are you sure?</p>
+    <button class="btn-danger" id="confirm-yes">Yes, Delete</button>
+    <button class="btn-secondary" id="confirm-no">Cancel</button>
+  </div>
+
+  <script src="js/db.js"></script>
+  <script src="js/products.js"></script>
+  <script src="js/sales.js"></script>
+  <script src="js/debts.js"></script>
+  <script src="js/loans.js"></script>
+  <script src="js/expenses.js"></script>
+  <script src="js/reports.js"></script>
+  <script src="js/backup.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
