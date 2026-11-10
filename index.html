@@ -90,6 +90,15 @@
         </div>
       </div>
 
+      <!-- NET PROFIT - FIXED: One clean card, same size as others -->
+      <div class="cards">
+        <div class="card blue">
+          <span>Net Profit Today</span>
+          <strong id="dash-net-profit">KSh 0</strong>
+          <small>Gross Profit - Expenses</small>
+        </div>
+      </div>
+
       <h3>Low Stock — Buy Soon</h3>
       <div id="low-stock-list">
         <p class="muted">No low stock. Good!</p>
@@ -374,17 +383,32 @@
         <div class="card"><span>Expenses This Month</span><strong id="expenses-month">KSh 0</strong></div>
       </div>
 
+      <!-- NET PROFIT - FIXED: One clean card -->
+      <div class="cards">
+        <div class="card blue">
+          <span>Net Profit Today</span>
+          <strong id="expenses-net-today">KSh 0</strong>
+          <small>Gross Profit - Expenses</small>
+        </div>
+      </div>
+
       <form id="expense-form">
-        <label>Type *
-          <select id="expense-type">
-            <option value="Transport">Transport</option>
-            <option value="Rent">Rent</option>
-            <option value="Electricity">Electricity / Tokens</option>
-            <option value="Restocking">Shopping / Restocking</option>
-            <option value="Employee">Employee Payment</option>
-            <option value="Airtime">Airtime / Bundles</option>
-            <option value="Other">Other</option>
-          </select>
+        <label>Expense Name * (Type your own)
+          <input type="text" id="expense-type" list="expense-types-list" placeholder="e.g. Transport, Rent, Water, Security, Plastic Bags..." required autocomplete="off" />
+          <datalist id="expense-types-list">
+            <option value="Transport"></option>
+            <option value="Rent"></option>
+            <option value="Electricity / Tokens"></option>
+            <option value="Restocking"></option>
+            <option value="Employee Payment"></option>
+            <option value="Airtime / Bundles"></option>
+            <option value="Water"></option>
+            <option value="Security"></option>
+            <option value="Plastic Bags / Packaging"></option>
+            <option value="Cleaning"></option>
+            <option value="Other"></option>
+          </datalist>
+          <small class="muted">Type anything — Water, Security, Chama, etc. App remembers it and suggests it next time.</small>
         </label>
         <label>What was it for?
           <input type="text" id="expense-desc" placeholder="e.g. Transport to Marikiti" />

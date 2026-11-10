@@ -1,20 +1,25 @@
-// Smart Duka - sales.js - PHASE 10
-// Sales: Add to cart, save sale, deduct stock, auto-Deni, dashboard
+// Smart Duka - sales.js - FINAL v3
+// Matches YOUR index.html:
+// sale-form, sale-product, sale-qty, sale-price, add-to-sale-btn, sale-items-body, sale-total
+// sale-payment, sale-customer, sale-phone, sale-paid, clear-sale-btn
+// search-sales, filter-sales-date, sales-history-list
+// dash-sales-today, dash-sales-count, dash-collected, dash-cash, dash-mpesa, dash-profit, recent-sales-list
 
-let currentSaleItems = []; // Items in the sale you are building right now
-let allSales = []; // All sales from DB
+let allSales = [];
+let currentSaleItems = []; // [{ productId, name, qty, sellingPrice, buyingPrice, total, cogs }]
 
-// Load all sales from DB
 async function loadSales() {
   try {
     await openDB();
     allSales = await dbGetAll('sales');
-    // Newest first
     allSales.sort(function (a, b) {
       return new Date(b.createdAt) - new Date(a.createdAt);
     });
     renderSalesHistory(allSales);
     updateDashboardSales();
+    refreshSaleProductDropdown();
+    // Net Profit depends on sales, so update it too
+    if (typeof updateNetProfit === 'function') updateNetProfit();
     return allSales;
   } catch (e) {
     console.error('Load sales failed', e);
@@ -22,337 +27,339 @@ async function loadSales() {
   }
 }
 
-// When you pick a product in Sale form, auto-fill price
-function onSaleProductChange() {
-  const select = document.getElementById('sale-product');
-  const priceEl = document.getElementById('sale-price');
-  if (!select || !priceEl) return;
-  const id = Number(select.value);
-  if (!id) { priceEl.value = ''; return; }
-  const product = allProducts.find(function (p) { return p.id === id; });
-  if (product) {
-    priceEl.value = product.selling;
-    // Hint stock in qty placeholder
-    const qtyEl = document.getElementById('sale-qty');
-    if (qtyEl) qtyEl.placeholder = 'Stock: ' + product.qty;
+// ============ DASHBOARD SALES ============
+
+function updateDashboardSales() {
+  var todayISO = getTodayISO();
+  var today = allSales.filter(function (s) { return s.createdAt.slice(0, 10) === todayISO; });
+
+  var revenue = today.reduce(function (sum, s) { return sum + Number(s.total || 0); }, 0);
+  var cogs = today.reduce(function (sum, s) { return sum + Number(s.cogs || 0); }, 0);
+  var gross = revenue - cogs;
+
+  // Collected = paid today (Cash + M-Pesa). Credit not counted as collected yet.
+  var collected = today.reduce(function (sum, s) { return sum + Number(s.paid || 0); }, 0);
+  var cashCollected = today.filter(function (s) { return s.payment === 'Cash'; }).reduce(function (sum, s) { return sum + Number(s.paid || 0); }, 0);
+  var mpesaCollected = today.filter(function (s) { return s.payment === 'M-Pesa'; }).reduce(function (sum, s) { return sum + Number(s.paid || 0); }, 0);
+  var mixedCollected = today.filter(function (s) { return s.payment === 'Cash+M-Pesa'; }).reduce(function (sum, s) { return sum + Number(s.paid || 0); }, 0);
+  // For Cash+M-Pesa, we count it in Collected, but split is unknown - show in Collected only
+  // Cash/M-Pesa breakdown shows pure Cash / pure M-Pesa, mixed goes to Collected
+
+  var salesEl = document.getElementById('dash-sales-today');
+  if (salesEl) salesEl.textContent = formatMoney(revenue);
+  var countEl = document.getElementById('dash-sales-count');
+  if (countEl) countEl.textContent = today.length + ' sales today';
+
+  var collectedEl = document.getElementById('dash-collected');
+  if (collectedEl) collectedEl.textContent = formatMoney(collected);
+  var cashEl = document.getElementById('dash-cash');
+  if (cashEl) cashEl.textContent = formatMoney(cashCollected);
+  var mpesaEl = document.getElementById('dash-mpesa');
+  if (mpesaEl) mpesaEl.textContent = formatMoney(mpesaCollected);
+
+  var profitEl = document.getElementById('dash-profit');
+  if (profitEl) profitEl.textContent = formatMoney(gross);
+
+  // Recent Sales on Dashboard
+  var recentBox = document.getElementById('recent-sales-list');
+  if (recentBox) {
+    if (today.length === 0) {
+      recentBox.innerHTML = '<p class="muted">No sales yet today. Press "Sell" to record your first sale.</p>';
+    } else {
+      var html = '';
+      today.slice(0, 5).forEach(function (s) {
+        var time = new Date(s.createdAt).toLocaleTimeString('en-KE', { hour: 'numeric', minute: '2-digit' });
+        var itemsText = (s.items || []).map(function (it) { return it.qty + 'x ' + it.name; }).join(', ');
+        var bal = Number(s.balance || 0);
+        html += '<div class="list-row"><div><strong>' + escapeHtml(itemsText) + '</strong><div class="muted">' + time + ' • ' + escapeHtml(s.customer || 'Walk-in') + ' • ' + escapeHtml(s.payment || 'Cash') + '</div></div>';
+        html += '<div><strong>' + formatMoney(s.total) + '</strong><div class="muted">Paid ' + formatMoney(s.paid) + (bal > 0 ? ' • Deni ' + formatMoney(bal) : '') + '</div></div></div>';
+      });
+      recentBox.innerHTML = html;
+    }
+  }
+
+  // Auto Net Profit
+  if (typeof updateNetProfit === 'function') updateNetProfit();
+}
+
+// ============ SALE PRODUCT DROPDOWN ============
+
+function refreshSaleProductDropdown() {
+  var select = document.getElementById('sale-product');
+  if (!select) return;
+  var products = (typeof allProducts !== 'undefined' && allProducts) ? allProducts : [];
+  var currentVal = select.value;
+  select.innerHTML = '<option value="">-- Choose product --</option>';
+  products.forEach(function (p) {
+    var opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = p.name + ' — ' + formatMoney(p.sellingPrice) + ' (Stock: ' + p.qty + ')';
+    select.appendChild(opt);
+  });
+  if (currentVal) select.value = currentVal;
+
+  // When product changes, auto-fill price
+  // (we attach once, not on every refresh)
+  if (!select._smartDukaBound) {
+    select._smartDukaBound = true;
+    select.addEventListener('change', function () {
+      var pid = Number(select.value);
+      var prod = products.find(function (p) { return p.id === pid; });
+      var priceEl = document.getElementById('sale-price');
+      if (prod && priceEl) priceEl.value = prod.sellingPrice;
+    });
   }
 }
 
-// Add one product to current sale cart
+// ============ CART ============
+
 function addToSale() {
-  const select = document.getElementById('sale-product');
-  const qtyEl = document.getElementById('sale-qty');
-  const priceEl = document.getElementById('sale-price');
+  var select = document.getElementById('sale-product');
+  var qtyEl = document.getElementById('sale-qty');
+  var priceEl = document.getElementById('sale-price');
 
-  const productId = Number(select.value);
-  const qty = Number(qtyEl.value);
-  const price = Number(priceEl.value);
-
-  if (!productId) { showToast('Choose a product first'); return; }
-  if (!qty || qty <= 0) { showToast('Quantity must be more than 0'); return; }
-  if (price < 0) { showToast('Price cannot be negative'); return; }
-
-  const product = allProducts.find(function (p) { return p.id === productId; });
+  if (!select || !select.value) { showToast('Choose a product first'); return; }
+  var productId = Number(select.value);
+  var products = (typeof allProducts !== 'undefined' && allProducts) ? allProducts : [];
+  var product = products.find(function (p) { return p.id === productId; });
   if (!product) { showToast('Product not found'); return; }
 
-  // Check stock - including what is already in cart
-  const alreadyInCart = currentSaleItems
-    .filter(function (item) { return item.productId === productId; })
-    .reduce(function (sum, item) { return sum + item.qty; }, 0);
+  var qty = qtyEl ? Number(qtyEl.value) : 1;
+  var price = priceEl ? Number(priceEl.value) : Number(product.sellingPrice);
+  if (!qty || qty <= 0) { showToast('Qty must be more than 0'); return; }
+  if (!price || price < 0) { showToast('Price is not valid'); return; }
 
-  if (qty + alreadyInCart > product.qty) {
-    showToast('Not enough stock! You have ' + product.qty + ' ' + product.name + ', already in cart: ' + alreadyInCart);
-    return;
+  // Stock check - allow decimals like 2.5 for Gomba
+  var already = currentSaleItems.find(function (it) { return it.productId === productId; });
+  var totalWanted = (already ? Number(already.qty) : 0) + qty;
+  if (totalWanted > Number(product.qty)) {
+    if (!confirm('Only ' + product.qty + ' left in stock for ' + product.name + '. You want ' + totalWanted + '. Continue anyway?')) return;
   }
 
-  currentSaleItems.push({
-    productId: productId,
-    name: product.name,
-    qty: qty,
-    price: price,
-    buying: product.buying, // Save buying price now - for profit later
-    total: qty * price,
-    cogs: qty * product.buying
-  });
+  if (already) {
+    already.qty = Number(already.qty) + qty;
+    already.sellingPrice = price;
+    already.total = Number(already.qty) * price;
+    already.cogs = Number(already.qty) * Number(product.buyingPrice);
+  } else {
+    currentSaleItems.push({
+      productId: productId,
+      name: product.name,
+      qty: qty,
+      sellingPrice: price,
+      buyingPrice: Number(product.buyingPrice),
+      total: qty * price,
+      cogs: qty * Number(product.buyingPrice)
+    });
+  }
 
   renderSaleCart();
-  // Reset qty to 1, keep product selected for fast selling
-  qtyEl.value = 1;
-  qtyEl.focus();
+  showToast('Added: ' + qty + 'x ' + product.name);
 }
 
-// Show cart table + total
 function renderSaleCart() {
-  const tbody = document.getElementById('sale-items-body');
-  const totalEl = document.getElementById('sale-total');
-  const paidEl = document.getElementById('sale-paid');
-
+  var tbody = document.getElementById('sale-items-body');
+  var totalEl = document.getElementById('sale-total');
   if (!tbody) return;
 
   if (currentSaleItems.length === 0) {
     tbody.innerHTML = '<tr><td colspan="5" class="muted">No items yet. Add a product above.</td></tr>';
-    if (totalEl) totalEl.textContent = 'KSh 0';
-    if (paidEl) paidEl.value = 0;
+    if (totalEl) totalEl.textContent = formatMoney(0);
     return;
   }
 
-  let html = '';
-  let total = 0;
-  currentSaleItems.forEach(function (item, index) {
-    total += item.total;
-    html += '<tr>';
-    html += '<td>' + escapeHtml(item.name) + '</td>';
-    html += '<td>' + item.qty + '</td>';
-    html += '<td>' + formatMoney(item.price) + '</td>';
-    html += '<td>' + formatMoney(item.total) + '</td>';
-    html += '<td><button type="button" class="btn-small" onclick="removeFromSale(' + index + ')">Remove</button></td>';
-    html += '</tr>';
+  var total = 0;
+  var cogs = 0;
+  var html = '';
+  currentSaleItems.forEach(function (it, idx) {
+    total += Number(it.total);
+    cogs += Number(it.cogs);
+    html += '<tr><td>' + escapeHtml(it.name) + '</td><td>' + it.qty + '</td><td>' + formatMoney(it.sellingPrice) + '</td><td>' + formatMoney(it.total) + '</td><td><button type="button" class="btn-secondary" onclick="removeSaleItem(' + idx + ')">Remove</button></td></tr>';
   });
   tbody.innerHTML = html;
   if (totalEl) totalEl.textContent = formatMoney(total);
-  // Auto-fill paid = total (customer pays full by default)
-  // If user already typed less, don't overwrite
-  if (paidEl && Number(paidEl.value) === 0) paidEl.value = total;
+
+  // Show profit hint in total line if you want - we keep total only in your HTML
+  console.log('Cart total', total, 'Profit', total - cogs);
 }
 
-function removeFromSale(index) {
-  currentSaleItems.splice(index, 1);
+function removeSaleItem(idx) {
+  currentSaleItems.splice(idx, 1);
   renderSaleCart();
 }
 
-function clearSaleCart() {
+function clearSale() {
   currentSaleItems = [];
-  renderSaleCart();
-  const form = document.getElementById('sale-form');
+  var form = document.getElementById('sale-form');
   if (form) form.reset();
-  const qtyEl = document.getElementById('sale-qty');
+  var qtyEl = document.getElementById('sale-qty');
   if (qtyEl) qtyEl.value = 1;
-  const paidEl = document.getElementById('sale-paid');
+  var paidEl = document.getElementById('sale-paid');
   if (paidEl) paidEl.value = 0;
+  renderSaleCart();
 }
 
-// Save sale - THE MAIN FUNCTION
-async function handleSaveSale(e) {
-  e.preventDefault();
+function getSaleTotal() {
+  return currentSaleItems.reduce(function (sum, it) { return sum + Number(it.total); }, 0);
+}
+function getSaleCogs() {
+  return currentSaleItems.reduce(function (sum, it) { return sum + Number(it.cogs); }, 0);
+}
 
-  if (currentSaleItems.length === 0) {
-    showToast('Add at least one product to sale');
+// ============ SAVE SALE ============
+
+async function saveSale(e) {
+  if (e) e.preventDefault();
+  if (currentSaleItems.length === 0) { showToast('Add at least one product first'); return; }
+
+  var customerEl = document.getElementById('sale-customer');
+  var customer = customerEl ? (customerEl.value || '').trim() || 'Walk-in' : 'Walk-in';
+  var phoneEl = document.getElementById('sale-phone');
+  var phone = phoneEl ? phoneEl.value.trim() : '';
+  var paymentEl = document.getElementById('sale-payment');
+  var payment = paymentEl ? paymentEl.value : 'Cash';
+  var paidEl = document.getElementById('sale-paid');
+  var paidRaw = paidEl ? paidEl.value : '';
+
+  var total = getSaleTotal();
+  var cogs = getSaleCogs();
+  var gross = total - cogs;
+
+  // If paid is empty, assume full payment unless Credit
+  var paid = paidRaw === '' || paidRaw === null ? (payment === 'Credit' ? 0 : total) : Number(paidRaw);
+  if (isNaN(paid) || paid < 0) { showToast('Paid amount is not valid'); return; }
+  if (paid > total) { showToast('Paid cannot be more than Total ' + formatMoney(total)); return; }
+
+  var balance = total - paid;
+
+  // If balance > 0, need customer name for Deni
+  if (balance > 0 && (customer === 'Walk-in' || customer === '')) {
+    showToast('Balance ' + formatMoney(balance) + ' — Enter customer name for Deni');
+    if (customerEl) customerEl.focus();
     return;
   }
-
-  const payment = document.getElementById('sale-payment').value;
-  const customer = document.getElementById('sale-customer').value.trim();
-  const phone = document.getElementById('sale-phone').value.trim();
-  let paid = Number(document.getElementById('sale-paid').value) || 0;
-
-  const total = currentSaleItems.reduce(function (sum, item) { return sum + item.total; }, 0);
-  const cogs = currentSaleItems.reduce(function (sum, item) { return sum + item.cogs; }, 0);
-  const grossProfit = total - cogs;
-
-  // If payment is Credit, paid must be 0 or less than total
-  if (payment === 'Credit' && paid >= total) {
-    showToast('Credit sale: Paid should be less than total. If they paid full, choose Cash / M-Pesa.');
-    return;
-  }
-
-  // If customer chose Credit but didn't give name, ask
-  if (payment === 'Credit' && !customer) {
-    if (!confirm('No customer name for Credit sale. Continue without name?')) return;
-  }
-
-  // If paid is more than total, cap it - no overpay
-  if (paid > total) {
-    showToast('Paid is more than total. Setting paid = total.');
-    paid = total;
-  }
-
-  const balance = total - paid; // Amount still owed = Deni
-  const saleDate = new Date().toISOString();
-
-  const sale = {
-    items: currentSaleItems,
-    total: total,
-    cogs: cogs,
-    grossProfit: grossProfit,
-    payment: payment,
-    customer: customer || 'Walk-in',
-    phone: phone,
-    paid: paid,
-    balance: balance,
-    date: saleDate,
-    createdAt: saleDate
-  };
 
   try {
-    // 1. Save sale
-    const saleId = await dbAdd('sales', sale);
+    await openDB();
 
-    // 2. Deduct stock for each item
-    for (let i = 0; i < currentSaleItems.length; i++) {
-      const item = currentSaleItems[i];
-      const product = allProducts.find(function (p) { return p.id === item.productId; });
-      if (product) {
-        product.qty = product.qty - item.qty;
-        if (product.qty < 0) product.qty = 0;
-        await dbPut('products', product);
+    // 1. Save sale - COGS saved now so later price change does not change old profit
+    var saleId = await dbAdd('sales', {
+      customer: customer,
+      phone: phone,
+      payment: payment,
+      items: currentSaleItems,
+      total: total,
+      cogs: cogs,
+      grossProfit: gross,
+      paid: paid,
+      balance: balance,
+      createdAt: new Date().toISOString(),
+      date: getTodayISO()
+    });
+
+    // 2. Deduct stock
+    for (var i = 0; i < currentSaleItems.length; i++) {
+      var it = currentSaleItems[i];
+      var prod = await dbGet('products', it.productId);
+      if (prod) {
+        prod.qty = Number(prod.qty) - Number(it.qty);
+        await dbPut('products', prod);
       }
     }
 
-    // 3. If balance > 0, create Deni automatically
+    // 3. If balance > 0, auto-create Deni - NOT a second sale
     if (balance > 0) {
-      const itemsText = currentSaleItems.map(function (it) { return it.qty + 'x ' + it.name; }).join(', ');
       await dbAdd('debts', {
-        name: customer || 'Walk-in',
+        person: customer,
+        name: customer,
         phone: phone,
-        items: itemsText,
-        amount: balance,
-        paid: 0,
+        amount: total,
+        paid: paid,
         balance: balance,
         status: 'owing',
-        saleId: saleId,
-        date: saleDate,
-        createdAt: saleDate
+        items: currentSaleItems.map(function (x) { return x.qty + 'x ' + x.name; }).join(', '),
+        note: currentSaleItems.map(function (x) { return x.qty + 'x ' + x.name; }).join(', ') + ' - Sale #' + saleId,
+        date: getTodayISO(),
+        createdAt: new Date().toISOString(),
+        saleId: saleId
       });
-      await logActivity('Auto Deni created', (customer || 'Walk-in') + ' owes ' + formatMoney(balance) + ' from sale #' + saleId);
     }
 
-    await logActivity('Sale saved', 'Sale #' + saleId + ' - ' + formatMoney(total) + ' - ' + (customer || 'Walk-in') + ' - Profit ' + formatMoney(grossProfit));
+    await logActivity('Sale completed', customer + ' - ' + formatMoney(total) + ' - Profit ' + formatMoney(gross) + (balance > 0 ? ' - Deni ' + formatMoney(balance) : ''));
 
-    // 4. Clear cart + reload everything
-    clearSaleCart();
-    await loadProducts();
+    var savedText = currentSaleItems.map(function (x) { return x.qty + 'x ' + x.name; }).join(', ');
+    clearSale();
     await loadSales();
+    if (typeof loadProducts === 'function') await loadProducts();
     if (typeof loadDebts === 'function') await loadDebts();
+    if (typeof loadExpenses === 'function') await loadExpenses(); // triggers Net Profit recalc
 
-    showToast('Sale saved! ' + formatMoney(total) + (balance > 0 ? ' - Deni: ' + formatMoney(balance) : ' - Fully paid'));
+    if (balance > 0) {
+      showToast('Sale saved: ' + formatMoney(total) + ' • Deni ' + formatMoney(balance) + ' for ' + customer);
+    } else {
+      showToast('Sale saved: ' + formatMoney(total) + ' • Profit ' + formatMoney(gross));
+    }
+    console.log('Sale saved:', savedText, 'Total', total, 'COGS', cogs, 'Profit', gross, 'Deni', balance);
   } catch (err) {
     console.error(err);
     showToast('Failed to save sale');
   }
 }
 
-// Show sales history list
-function renderSalesHistory(list) {
-  const box = document.getElementById('sales-history-list');
-  if (!box) return;
+// ============ SALES HISTORY - SEARCH + DATE FILTER ============
 
-  if (list.length === 0) {
-    box.innerHTML = '<div class="empty-state"><p>No sales yet.</p><small>Your sales will appear here.</small></div>';
+function renderSalesHistory(list) {
+  var box = document.getElementById('sales-history-list');
+  if (!box) return;
+  if (!list || list.length === 0) {
+    box.innerHTML = '<p class="muted">No sales yet.</p>';
     return;
   }
-
-  let html = '';
-  list.slice(0, 20).forEach(function (sale) {
-    const itemsText = sale.items.map(function (it) { return it.qty + 'x ' + it.name; }).join(', ');
-    const dateStr = new Date(sale.createdAt).toLocaleDateString('en-KE', { day: 'numeric', month: 'short' }) + ' ' + new Date(sale.createdAt).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' });
-    html += '<div style="padding:12px 0;border-bottom:1px solid var(--border)">';
-    html += '<div style="display:flex;justify-content:space-between;gap:10px"><strong>' + formatMoney(sale.total) + '</strong><span class="muted" style="font-size:13px">' + dateStr + '</span></div>';
-    html += '<div style="font-size:14px">' + escapeHtml(itemsText) + '</div>';
-    html += '<div style="font-size:13px;color:var(--text-muted)">' + escapeHtml(sale.customer) + ' • ' + escapeHtml(sale.payment) + ' • Paid ' + formatMoney(sale.paid) + (sale.balance > 0 ? ' • <b style="color:var(--red)">Deni ' + formatMoney(sale.balance) + '</b>' : ' • Fully paid') + ' • Profit ' + formatMoney(sale.grossProfit) + '</div>';
-    html += '</div>';
+  var html = '';
+  list.slice(0, 50).forEach(function (s) {
+    var dateStr = new Date(s.createdAt).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
+    var time = new Date(s.createdAt).toLocaleTimeString('en-KE', { hour: 'numeric', minute: '2-digit' });
+    var itemsText = (s.items || []).map(function (it) { return it.qty + 'x ' + it.name; }).join(', ');
+    var bal = Number(s.balance || 0);
+    html += '<div class="list-row"><div><strong>' + escapeHtml(itemsText) + '</strong><div class="muted">' + dateStr + ' ' + time + ' • ' + escapeHtml(s.customer || 'Walk-in') + ' • ' + escapeHtml(s.payment || 'Cash') + '</div></div>';
+    html += '<div><strong>' + formatMoney(s.total) + '</strong><div class="muted">Paid ' + formatMoney(s.paid) + (bal > 0 ? ' • Deni ' + formatMoney(bal) : ' • Paid Full') + '</div></div></div>';
   });
   box.innerHTML = html;
 }
 
-// Filter sales history by search + date
 function filterSalesHistory() {
-  const search = (document.getElementById('search-sales')?.value || '').toLowerCase().trim();
-  const dateFilter = document.getElementById('filter-sales-date')?.value || '';
+  var searchEl = document.getElementById('search-sales');
+  var dateEl = document.getElementById('filter-sales-date');
+  var q = searchEl ? (searchEl.value || '').toLowerCase().trim() : '';
+  var dateFilter = dateEl ? dateEl.value : '';
 
-  let filtered = allSales;
-  if (search) {
-    filtered = filtered.filter(function (s) {
-      const hay = (s.customer + ' ' + s.items.map(function (it) { return it.name; }).join(' ')).toLowerCase();
-      return hay.includes(search);
-    });
-  }
-  if (dateFilter) {
-    filtered = filtered.filter(function (s) {
-      return s.createdAt.slice(0, 10) === dateFilter;
-    });
-  }
+  var filtered = allSales.filter(function (s) {
+    var matchesSearch = true;
+    if (q) {
+      var itemsText = (s.items || []).map(function (it) { return it.name; }).join(' ').toLowerCase();
+      matchesSearch = (itemsText + ' ' + (s.customer || '').toLowerCase()).includes(q);
+    }
+    var matchesDate = true;
+    if (dateFilter) matchesDate = s.createdAt.slice(0, 10) === dateFilter;
+    return matchesSearch && matchesDate;
+  });
   renderSalesHistory(filtered);
 }
 
-// Dashboard: Sales today + Collected + Profit + Recent
-function updateDashboardSales() {
-  const todayISO = getTodayISO();
-  const todaySales = allSales.filter(function (s) { return s.createdAt.slice(0, 10) === todayISO; });
-
-  const totalToday = todaySales.reduce(function (sum, s) { return sum + s.total; }, 0);
-  const profitToday = todaySales.reduce(function (sum, s) { return sum + s.grossProfit; }, 0);
-  const collectedToday = todaySales.reduce(function (sum, s) { return sum + s.paid; }, 0);
-
-  // Cash vs M-Pesa - simple split: if payment is Cash, all paid is cash, if M-Pesa, all is mpesa
-  // Cash+M-Pesa we count as half/half - good enough for Phase 10, we improve later
-  let cash = 0, mpesa = 0;
-  todaySales.forEach(function (s) {
-    if (s.payment === 'Cash') cash += s.paid;
-    else if (s.payment === 'M-Pesa') mpesa += s.paid;
-    else if (s.payment === 'Cash+M-Pesa') { cash += s.paid / 2; mpesa += s.paid / 2; }
-    else if (s.payment === 'Credit') { /* paid on credit still counts if they paid part */ cash += s.paid; }
-  });
-
-  const elSales = document.getElementById('dash-sales-today');
-  if (elSales) elSales.textContent = formatMoney(totalToday);
-  const elCount = document.getElementById('dash-sales-count');
-  if (elCount) elCount.textContent = todaySales.length + ' sales today';
-  const elCollected = document.getElementById('dash-collected');
-  if (elCollected) elCollected.textContent = formatMoney(collectedToday);
-  const elCash = document.getElementById('dash-cash');
-  if (elCash) elCash.textContent = formatMoney(cash);
-  const elMpesa = document.getElementById('dash-mpesa');
-  if (elMpesa) elMpesa.textContent = formatMoney(mpesa);
-  const elProfit = document.getElementById('dash-profit');
-  if (elProfit) elProfit.textContent = formatMoney(profitToday);
-
-  // Recent sales on dashboard - last 5 today
-  const recentBox = document.getElementById('recent-sales-list');
-  if (recentBox) {
-    if (todaySales.length === 0) {
-      recentBox.innerHTML = '<div class="empty-state"><p>No sales yet today.</p><button class="btn-small" onclick="showScreen(\'screen-sales\')">Record First Sale</button></div>';
-    } else {
-      let html = '';
-      todaySales.slice(0, 5).forEach(function (s) {
-        const itemsText = s.items.map(function (it) { return it.qty + 'x ' + it.name; }).join(', ');
-        html += '<div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between"><span>' + escapeHtml(itemsText) + ' • ' + escapeHtml(s.customer) + '</span><strong>' + formatMoney(s.total) + '</strong></div>';
-      });
-      recentBox.innerHTML = html;
-    }
-  }
-}
-
-// Wire up
 document.addEventListener('DOMContentLoaded', function () {
-  const saleForm = document.getElementById('sale-form');
-  if (saleForm) saleForm.addEventListener('submit', handleSaveSale);
+  var saleForm = document.getElementById('sale-form');
+  if (saleForm) saleForm.addEventListener('submit', saveSale);
 
-  const addBtn = document.getElementById('add-to-sale-btn');
+  var addBtn = document.getElementById('add-to-sale-btn');
   if (addBtn) addBtn.addEventListener('click', addToSale);
 
-  const clearBtn = document.getElementById('clear-sale-btn');
-  if (clearBtn) clearBtn.addEventListener('click', clearSaleCart);
+  var clearBtn = document.getElementById('clear-sale-btn');
+  if (clearBtn) clearBtn.addEventListener('click', clearSale);
 
-  const prodSelect = document.getElementById('sale-product');
-  if (prodSelect) prodSelect.addEventListener('change', onSaleProductChange);
+  var searchEl = document.getElementById('search-sales');
+  if (searchEl) searchEl.addEventListener('input', filterSalesHistory);
+  var dateEl = document.getElementById('filter-sales-date');
+  if (dateEl) dateEl.addEventListener('change', filterSalesHistory);
 
-  const searchInput = document.getElementById('search-sales');
-  if (searchInput) searchInput.addEventListener('input', filterSalesHistory);
-
-  const dateFilter = document.getElementById('filter-sales-date');
-  if (dateFilter) dateFilter.addEventListener('change', filterSalesHistory);
-
-  // When payment changes to Credit, hint customer name
-  const paymentSelect = document.getElementById('sale-payment');
-  if (paymentSelect) {
-    paymentSelect.addEventListener('change', function () {
-      if (paymentSelect.value === 'Credit') {
-        showToast('Credit sale: Remember customer name - it becomes Deni');
-        const cust = document.getElementById('sale-customer');
-        if (cust) cust.focus();
-      }
-    });
-  }
-
-  setTimeout(function () { loadSales(); }, 400);
+  setTimeout(function () { loadSales(); }, 500);
 });
