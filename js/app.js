@@ -1,5 +1,5 @@
-// Smart Duka - app.js - FINAL v3 + Phase 8 + Phase 9
-// Centered header + Global Search + Dark Default + Smart Greeting + Active Nav + IndexedDB
+// Smart Duka - app.js - FINAL v3 + Phase 8 + 9 + 10
+// Centered header + Global Search + Dark Default + Smart Greeting + Active Nav + IndexedDB + Products + Sales
 
 // Show one screen, hide others + highlight nav button
 function showScreen(screenId) {
@@ -16,7 +16,6 @@ function showScreen(screenId) {
     return;
   }
 
-  // Highlight nav button - works for top nav (v3 has only top nav)
   document.querySelectorAll('nav button').forEach(function (btn) {
     if (btn.getAttribute('data-screen') === screenId) {
       btn.classList.add('nav-active');
@@ -98,13 +97,11 @@ function getTodayISO() {
 
 // =====================================================
 // GLOBAL SEARCH - Search Anything
-// Searches products, debts, loans, expenses, sales, screens
 // =====================================================
 
 function getSearchableData() {
   const items = [];
 
-  // 1. Screens as shortcuts - so "deni", "stock", "report" always work
   const shortcuts = [
     { title: 'Record New Sale', detail: 'Sell products to a customer', tag: 'Sell', screen: 'screen-sales' },
     { title: 'My Stock / Products', detail: 'Add product, check stock', tag: 'Stock', screen: 'screen-products' },
@@ -117,42 +114,36 @@ function getSearchableData() {
   ];
   shortcuts.forEach(function (s) { items.push(s); });
 
-  // 2. Products from table (now real data from Phase 9)
   document.querySelectorAll('#products-body tr').forEach(function (row) {
     const text = row.innerText.trim();
     if (!text || text.includes('No products yet')) return;
     items.push({ title: text.split('\n')[0] || text, detail: 'Product in Stock - ' + text.replace(/\n/g, ' | '), tag: 'Stock', screen: 'screen-products' });
   });
 
-  // 3. Debts list
   document.querySelectorAll('#debts-list > *').forEach(function (el) {
     const text = el.innerText.trim();
     if (!text || text.includes('No debts yet')) return;
     items.push({ title: text.split('\n')[0] || text, detail: 'Deni - ' + text.replace(/\n/g, ' | ').slice(0, 80), tag: 'Deni', screen: 'screen-debts' });
   });
 
-  // 4. Loans list
   document.querySelectorAll('#loans-list > *').forEach(function (el) {
     const text = el.innerText.trim();
     if (!text || text.includes('No loans yet')) return;
     items.push({ title: text.split('\n')[0] || text, detail: 'Loan - ' + text.replace(/\n/g, ' | ').slice(0, 80), tag: 'Loans', screen: 'screen-loans' });
   });
 
-  // 5. Expenses list
   document.querySelectorAll('#expenses-list > *').forEach(function (el) {
     const text = el.innerText.trim();
     if (!text || text.includes('No expenses yet')) return;
     items.push({ title: text.split('\n')[0] || text, detail: 'Expense - ' + text.replace(/\n/g, ' | ').slice(0, 80), tag: 'Expenses', screen: 'screen-expenses' });
   });
 
-  // 6. Sales history
   document.querySelectorAll('#sales-history-list > *').forEach(function (el) {
     const text = el.innerText.trim();
     if (!text || text.includes('No sales yet')) return;
     items.push({ title: text.split('\n')[0] || text, detail: 'Sale - ' + text.replace(/\n/g, ' | ').slice(0, 80), tag: 'Sales', screen: 'screen-sales' });
   });
 
-  // 7. Low stock list
   document.querySelectorAll('#low-stock-list > *').forEach(function (el) {
     const text = el.innerText.trim();
     if (!text || text.includes('No low stock')) return;
@@ -260,7 +251,8 @@ function setupGlobalSearch() {
 }
 
 // =====================================================
-// START APP - Phase 8 + Phase 9
+// START APP - Phase 8 + 9 + 10
+// Order matters: DB -> Products -> Sales -> Debts
 // =====================================================
 document.addEventListener('DOMContentLoaded', function () {
   // 1. Theme - Dark by default, remember choice
@@ -284,13 +276,21 @@ document.addEventListener('DOMContentLoaded', function () {
     if (el && !el.value) el.value = getTodayISO();
   });
 
-  // 5. Open DB (Phase 8) then load Products (Phase 9)
+  // 5. Open DB (Phase 8) then load in order: Products -> Sales -> Debts
   if (typeof openDB === 'function') {
     openDB().then(function () {
       console.log('Smart Duka ready - DB open');
-      // Load products after DB is open
+      // Products first - Sales needs products for stock check
       if (typeof loadProducts === 'function') {
-        loadProducts();
+        loadProducts().then(function () {
+          // Sales second - needs products loaded
+          if (typeof loadSales === 'function') loadSales();
+          // Debts third - will be used in Phase 11
+          if (typeof loadDebts === 'function') loadDebts();
+          // Expenses / Loans / Reports load in their own files too
+          if (typeof loadExpenses === 'function') loadExpenses();
+          if (typeof loadLoans === 'function') loadLoans();
+        });
       }
     }).catch(function (e) {
       console.error('DB failed to open', e);
@@ -300,5 +300,5 @@ document.addEventListener('DOMContentLoaded', function () {
     console.error('openDB not found - check js/db.js is loaded before app.js');
   }
 
-  console.log('Smart Duka v3 + Phase 8 + Phase 9 loaded');
+  console.log('Smart Duka v3 + Phase 8 + 9 + 10 loaded');
 });
