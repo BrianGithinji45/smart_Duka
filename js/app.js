@@ -1,25 +1,41 @@
-// Smart Duka - app.js - FINAL v3 + Phase 8-13.5
-// Dashboard, Theme, Navigation, Global Search, Helpers
+// Smart Duka - app.js - FINAL FIXED for YOUR v3 HTML
+// Your HTML uses: showScreen('screen-dashboard'), theme-btn, nav-active, today-date, greeting
 
-function showScreen(name) {
-  document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
-  const target = document.getElementById('screen-' + name);
-  if (target) target.classList.add('active');
-  document.querySelectorAll('.nav-btn').forEach(function (b) {
-    b.classList.toggle('active', b.getAttribute('data-screen') === name);
+function showScreen(screenId) {
+  // Accept both 'dashboard' and 'screen-dashboard'
+  var id = screenId;
+  if (id.indexOf('screen-') !== 0) id = 'screen-' + id;
+
+  // Hide all screens
+  document.querySelectorAll('.screen').forEach(function (s) {
+    s.classList.remove('active');
   });
+  var target = document.getElementById(id);
+  if (target) target.classList.add('active');
+
+  // Nav highlight - your HTML uses .nav-active on nav buttons
+  document.querySelectorAll('nav button').forEach(function (b) {
+    if (b.getAttribute('data-screen') === id) {
+      b.classList.add('nav-active');
+    } else {
+      b.classList.remove('nav-active');
+    }
+  });
+
   window.scrollTo({ top: 0, behavior: 'smooth' });
+
   // Refresh the screen we just opened
-  if (name === 'dashboard' && typeof refreshDashboard === 'function') refreshDashboard();
-  if (name === 'products' && typeof loadProducts === 'function') loadProducts();
-  if (name === 'sales' && typeof loadSales === 'function') loadSales();
-  if (name === 'debts' && typeof loadDebts === 'function') loadDebts();
-  if (name === 'loans' && typeof loadLoans === 'function') loadLoans();
-  if (name === 'expenses' && typeof loadExpenses === 'function') loadExpenses();
+  if (id === 'screen-dashboard' && typeof refreshDashboard === 'function') refreshDashboard();
+  if (id === 'screen-products' && typeof loadProducts === 'function') loadProducts();
+  if (id === 'screen-sales' && typeof loadSales === 'function') loadSales();
+  if (id === 'screen-debts' && typeof loadDebts === 'function') loadDebts();
+  if (id === 'screen-loans' && typeof loadLoans === 'function') loadLoans();
+  if (id === 'screen-expenses' && typeof loadExpenses === 'function') loadExpenses();
+  if (id === 'screen-reports' && typeof loadReports === 'function') loadReports();
 }
 
 function formatMoney(n) {
-  const num = Number(n || 0);
+  var num = Number(n || 0);
   return 'KSh ' + num.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
@@ -31,20 +47,20 @@ function escapeHtml(str) {
 }
 
 function getTodayISO() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  var d = new Date();
+  var y = d.getFullYear();
+  var m = String(d.getMonth() + 1).padStart(2, '0');
+  var day = String(d.getDate()).padStart(2, '0');
   return y + '-' + m + '-' + day;
 }
 
 function showToast(msg) {
-  let el = document.getElementById('toast');
+  var el = document.getElementById('toast');
   if (!el) return;
   el.textContent = msg;
-  el.style.display = 'block';
+  el.classList.remove('hidden');
   clearTimeout(el._t);
-  el._t = setTimeout(function () { el.style.display = 'none'; }, 3000);
+  el._t = setTimeout(function () { el.classList.add('hidden'); }, 3000);
 }
 
 async function logActivity(title, detail) {
@@ -57,35 +73,45 @@ async function logActivity(title, detail) {
 async function loadRecentActivity() {
   try {
     await openDB();
-    const items = await dbGetAll('audit');
+    var items = await dbGetAll('audit');
     items.sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
-    const box = document.getElementById('recent-activity');
+    // Your HTML has audit-list in Backup, not recent-activity on Dashboard
+    // We also fill recent-sales on Dashboard from sales.js, so this is for Backup
+    var box = document.getElementById('audit-list');
     if (!box) return;
     if (items.length === 0) { box.innerHTML = '<p class="muted">No activity yet.</p>'; return; }
-    let html = '';
-    items.slice(0, 10).forEach(function (it) {
-      const time = new Date(it.createdAt).toLocaleString('en-KE', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
-      html += '<div style="padding:8px 0;border-bottom:1px solid var(--border)"><strong>' + escapeHtml(it.action || it.title || 'Activity') + '</strong><div style="font-size:13px;color:var(--text-muted)">' + escapeHtml(it.detail || '') + ' • ' + time + '</div></div>';
+    var html = '';
+    items.slice(0, 20).forEach(function (it) {
+      var time = new Date(it.createdAt).toLocaleString('en-KE', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+      html += '<div class="list-row"><div><strong>' + escapeHtml(it.action || it.title || 'Activity') + '</strong><div class="muted">' + escapeHtml(it.detail || '') + '</div></div><div class="muted">' + time + '</div></div>';
     });
     box.innerHTML = html;
   } catch (e) {}
 }
 
 function updateGreeting() {
-  const h = new Date().getHours();
-  let greet = 'Good Evening, Boss';
-  if (h < 12) greet = 'Good Morning, Boss';
-  else if (h < 17) greet = 'Good Afternoon, Boss';
-  const el = document.getElementById('greeting');
+  var h = new Date().getHours();
+  var greet = 'Good evening. How is business today?';
+  if (h < 12) greet = 'Good morning. How is business today?';
+  else if (h < 17) greet = 'Good afternoon. How is business today?';
+
+  var el = document.getElementById('greeting');
   if (el) el.textContent = greet;
-  const dateEl = document.getElementById('dash-date');
+
+  var dateEl = document.getElementById('today-date');
   if (dateEl) dateEl.textContent = new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  // Also support old dash-date if present
+  var dashDate = document.getElementById('dash-date');
+  if (dashDate) dashDate.textContent = new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-// Theme - Dark by default
+// Theme - Dark by default - Your HTML button is id="theme-btn"
 function applyTheme(theme) {
-  const body = document.body;
-  const btn = document.getElementById('theme-toggle');
+  var body = document.body;
+  var btn = document.getElementById('theme-btn');
+  // Also support old id if present
+  if (!btn) btn = document.getElementById('theme-toggle');
   if (theme === 'light') {
     body.classList.remove('dark');
     if (btn) btn.textContent = 'Dark Mode';
@@ -97,7 +123,7 @@ function applyTheme(theme) {
 }
 
 function toggleTheme() {
-  const isDark = document.body.classList.contains('dark');
+  var isDark = document.body.classList.contains('dark');
   applyTheme(isDark ? 'light' : 'dark');
 }
 
@@ -111,67 +137,66 @@ function refreshDashboard() {
 }
 
 // ============ GLOBAL SEARCH ============
+// Your HTML: global-search, global-search-clear, global-results (class hidden)
+
 function clearGlobalSearch() {
-  const inp = document.getElementById('global-search');
+  var inp = document.getElementById('global-search');
   if (inp) inp.value = '';
-  const res = document.getElementById('global-results');
-  if (res) { res.style.display = 'none'; res.innerHTML = ''; }
+  var res = document.getElementById('global-results');
+  if (res) { res.classList.add('hidden'); res.innerHTML = ''; }
 }
 
 function quickSearch(term) {
-  const inp = document.getElementById('global-search');
+  var inp = document.getElementById('global-search');
   if (inp) { inp.value = term; inp.dispatchEvent(new Event('input')); inp.focus(); }
 }
 
 function doGlobalSearch(query) {
-  const box = document.getElementById('global-results');
+  var box = document.getElementById('global-results');
   if (!box) return;
-  const q = (query || '').toLowerCase().trim();
-  if (!q) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  var q = (query || '').toLowerCase().trim();
+  if (!q) { box.classList.add('hidden'); box.innerHTML = ''; return; }
 
-  let results = [];
+  var results = [];
 
-  // Products
-  (typeof allProducts !== 'undefined' ? allProducts : []).forEach(function (p) {
+  (typeof allProducts !== 'undefined' && allProducts ? allProducts : []).forEach(function (p) {
     if ((p.name + ' ' + (p.category || '')).toLowerCase().includes(q)) {
-      results.push({ label: p.name + ' • Stock: ' + p.qty + ' • ' + formatMoney(p.sellingPrice), screen: 'products', hint: 'Product' });
+      results.push({ label: p.name + ' • Stock: ' + p.qty + ' • ' + formatMoney(p.sellingPrice), screen: 'screen-products', hint: 'Product' });
     }
   });
-  // Debts
-  (typeof allDebts !== 'undefined' ? allDebts : []).forEach(function (d) {
-    if ((d.person + ' ' + (d.note || '')).toLowerCase().includes(q)) {
-      results.push({ label: d.person + ' • Deni: ' + formatMoney(d.balance) + ' • ' + d.status, screen: 'debts', hint: 'Deni' });
+  (typeof allDebts !== 'undefined' && allDebts ? allDebts : []).forEach(function (d) {
+    var name = d.person || d.name || '';
+    if ((name + ' ' + (d.note || '') + ' ' + (d.items || '')).toLowerCase().includes(q)) {
+      results.push({ label: name + ' • Deni: ' + formatMoney(d.balance) + ' • ' + d.status, screen: 'screen-debts', hint: 'Deni' });
     }
   });
-  // Loans
-  (typeof allLoans !== 'undefined' ? allLoans : []).forEach(function (l) {
+  (typeof allLoans !== 'undefined' && allLoans ? allLoans : []).forEach(function (l) {
     if ((l.person + ' ' + (l.note || '')).toLowerCase().includes(q)) {
-      results.push({ label: l.person + ' • Loan: ' + formatMoney(l.balance) + ' • ' + (l.type === 'given' ? 'I Gave' : 'I Took'), screen: 'loans', hint: 'Loan' });
+      results.push({ label: l.person + ' • Loan: ' + formatMoney(l.balance) + ' • ' + (l.type === 'given' ? 'I Gave' : 'I Took'), screen: 'screen-loans', hint: 'Loan' });
     }
   });
-  // Expenses
-  (typeof allExpenses !== 'undefined' ? allExpenses : []).forEach(function (e) {
+  (typeof allExpenses !== 'undefined' && allExpenses ? allExpenses : []).forEach(function (e) {
     if ((e.type + ' ' + (e.desc || '')).toLowerCase().includes(q)) {
-      results.push({ label: e.type + ' • ' + formatMoney(e.amount) + ' • ' + (e.desc || ''), screen: 'expenses', hint: 'Expense' });
+      results.push({ label: e.type + ' • ' + formatMoney(e.amount) + ' • ' + (e.desc || ''), screen: 'screen-expenses', hint: 'Expense' });
     }
   });
 
   if (q.includes('low stock') || q === 'low') {
-    (typeof allProducts !== 'undefined' ? allProducts : []).filter(function (p) { return Number(p.qty) <= Number(p.lowAt || 5); }).forEach(function (p) {
-      results.push({ label: p.name + ' • LOW: ' + p.qty + ' left', screen: 'products', hint: 'Low Stock' });
+    (typeof allProducts !== 'undefined' && allProducts ? allProducts : []).filter(function (p) { return Number(p.qty) <= Number(p.lowAt || p.low || 5); }).forEach(function (p) {
+      results.push({ label: p.name + ' • LOW: ' + p.qty + ' left', screen: 'screen-products', hint: 'Low Stock' });
     });
   }
 
   if (results.length === 0) {
-    box.innerHTML = '<div style="padding:12px">No results for "' + escapeHtml(query) + '"</div>';
+    box.innerHTML = '<div class="list-row">No results for "' + escapeHtml(query) + '"</div>';
   } else {
-    let html = '';
+    var html = '';
     results.slice(0, 12).forEach(function (r) {
-      html += '<div class="search-result-item" onclick="goToSearchResult(\'' + r.screen + '\')" style="padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer"><strong>[' + r.hint + ']</strong> ' + escapeHtml(r.label) + '</div>';
+      html += '<div class="list-row" onclick="goToSearchResult(\'' + r.screen + '\')"><div><strong>[' + r.hint + ']</strong> ' + escapeHtml(r.label) + '</div></div>';
     });
     box.innerHTML = html;
   }
-  box.style.display = 'block';
+  box.classList.remove('hidden');
 }
 
 function goToSearchResult(screen) {
@@ -180,30 +205,41 @@ function goToSearchResult(screen) {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-  // Theme
-  let savedTheme = 'dark';
+  // Theme - dark by default
+  var savedTheme = 'dark';
   try { savedTheme = localStorage.getItem('smartduka-theme') || 'dark'; } catch (e) {}
   applyTheme(savedTheme);
 
   updateGreeting();
   setInterval(updateGreeting, 60000);
 
-  // Dates defaults
-  const debtDate = document.getElementById('debt-date');
+  // Dates defaults - your HTML IDs
+  var debtDate = document.getElementById('debt-date');
   if (debtDate) debtDate.value = getTodayISO();
-  const loanDate = document.getElementById('loan-date');
+  var loanDate = document.getElementById('loan-date');
   if (loanDate) loanDate.value = getTodayISO();
-  const expDate = document.getElementById('expense-date');
+  var expDate = document.getElementById('expense-date');
   if (expDate) expDate.value = getTodayISO();
+  var reportFrom = document.getElementById('report-from');
+  if (reportFrom) reportFrom.value = getTodayISO();
+  var reportTo = document.getElementById('report-to');
+  if (reportTo) reportTo.value = getTodayISO();
 
-  // Global search wiring
-  const gSearch = document.getElementById('global-search');
+  // Theme button - your HTML uses onclick="toggleTheme()" already, but also bind here as backup
+  var themeBtn = document.getElementById('theme-btn');
+  if (themeBtn && !themeBtn._bound) {
+    themeBtn._bound = true;
+    // onclick in HTML already calls toggleTheme, so don't double-bind
+  }
+
+  // Global search wiring - your HTML uses onclick for clear, input event here
+  var gSearch = document.getElementById('global-search');
   if (gSearch) {
     gSearch.addEventListener('input', function () { doGlobalSearch(gSearch.value); });
     gSearch.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') clearGlobalSearch();
       if (e.key === 'Enter') {
-        const first = document.querySelector('.search-result-item');
+        var first = document.querySelector('#global-results .list-row');
         if (first) first.click();
       }
     });
@@ -211,15 +247,15 @@ document.addEventListener('DOMContentLoaded', function () {
   document.addEventListener('keydown', function (e) {
     if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
       e.preventDefault();
-      const inp = document.getElementById('global-search');
+      var inp = document.getElementById('global-search');
       if (inp) inp.focus();
     }
   });
   document.addEventListener('click', function (e) {
-    const wrap = document.querySelector('.search-wrap');
+    var wrap = document.querySelector('.global-search-wrap');
     if (wrap && !wrap.contains(e.target)) {
-      const res = document.getElementById('global-results');
-      if (res) res.style.display = 'none';
+      var res = document.getElementById('global-results');
+      if (res) res.classList.add('hidden');
     }
   });
 
