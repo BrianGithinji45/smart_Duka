@@ -1,0 +1,22 @@
+# Kibanda Smart - Files to ignore
+
+# System files - Mac
+.DS_Store
+
+# System files - Windows
+Thumbs.db
+Desktop.ini
+
+# VS Code settings (personal, not for team)
+.vscode/*
+
+# Node modules (if we use them later, they are huge)
+node_modules/
+
+# Temporary files
+*.log
+*.tmp
+*.bak
+
+# OS files
+*.swp
