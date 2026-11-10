@@ -1,5 +1,5 @@
-// Smart Duka - app.js - FINAL v3
-// Centered header + Global Search + Dark Default + Smart Greeting + Active Nav
+// Smart Duka - app.js - FINAL v3 + Phase 8 + Phase 9
+// Centered header + Global Search + Dark Default + Smart Greeting + Active Nav + IndexedDB
 
 // Show one screen, hide others + highlight nav button
 function showScreen(screenId) {
@@ -16,6 +16,7 @@ function showScreen(screenId) {
     return;
   }
 
+  // Highlight nav button - works for top nav (v3 has only top nav)
   document.querySelectorAll('nav button').forEach(function (btn) {
     if (btn.getAttribute('data-screen') === screenId) {
       btn.classList.add('nav-active');
@@ -24,7 +25,6 @@ function showScreen(screenId) {
     }
   });
 
-  // Close global search when user navigates
   hideGlobalResults();
 }
 
@@ -102,10 +102,6 @@ function getTodayISO() {
 // =====================================================
 
 function getSearchableData() {
-  // This works even BEFORE IndexedDB is built.
-  // Later in Phase 8, we will replace this with real DB data.
-  // For now it reads what is already on the page + localStorage if exists.
-
   const items = [];
 
   // 1. Screens as shortcuts - so "deni", "stock", "report" always work
@@ -121,7 +117,7 @@ function getSearchableData() {
   ];
   shortcuts.forEach(function (s) { items.push(s); });
 
-  // 2. Products from the table (works once you add products)
+  // 2. Products from table (now real data from Phase 9)
   document.querySelectorAll('#products-body tr').forEach(function (row) {
     const text = row.innerText.trim();
     if (!text || text.includes('No products yet')) return;
@@ -178,14 +174,11 @@ function renderGlobalResults(query) {
   }
 
   if (clearBtn) clearBtn.classList.add('visible');
-
   const q = query.toLowerCase().trim();
   const all = getSearchableData();
-
-  // Match if title OR detail contains query
   const matches = all.filter(function (item) {
     return (item.title + ' ' + item.detail).toLowerCase().includes(q);
-  }).slice(0, 8); // Show max 8 results
+  }).slice(0, 8);
 
   if (matches.length === 0) {
     box.innerHTML = '<div class="global-empty">No results for "' + query + '".<br>Try product name, customer name, or "deni", "stock", "loan".</div>';
@@ -200,7 +193,7 @@ function renderGlobalResults(query) {
     html += '<span class="global-result-tag">' + item.tag + '</span>';
     html += '</div>';
   });
-  html += '<div class="global-hint">Tap a result to go to that screen. Press Enter to go to first result.</div>';
+  html += '<div class="global-hint">Tap a result to go to that screen. Press Enter for first result.</div>';
   box.innerHTML = html;
   box.classList.remove('hidden');
 }
@@ -224,6 +217,14 @@ function goToSearchResult(screenId) {
   showScreen(screenId);
 }
 
+function quickSearch(word) {
+  const input = document.getElementById('global-search');
+  if (!input) return;
+  input.value = word;
+  renderGlobalResults(word);
+  input.focus();
+}
+
 function setupGlobalSearch() {
   const input = document.getElementById('global-search');
   if (!input) return;
@@ -232,7 +233,6 @@ function setupGlobalSearch() {
     renderGlobalResults(input.value);
   });
 
-  // Enter = go to first result
   input.addEventListener('keydown', function (e) {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -245,46 +245,60 @@ function setupGlobalSearch() {
     }
   });
 
-  // Close results when clicking outside
   document.addEventListener('click', function (e) {
     const wrap = document.querySelector('.global-search-wrap');
-    if (wrap && !wrap.contains(e.target)) {
-      hideGlobalResults();
-    }
+    if (wrap && !wrap.contains(e.target)) hideGlobalResults();
   });
 
-  // Shortcut: Press "/" anywhere to focus search (like Gmail / WhatsApp Web)
   document.addEventListener('keydown', function (e) {
-    const typingInInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
-    if (e.key === '/' && !typingInInput) {
+    const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
+    if (e.key === '/' && !typing) {
       e.preventDefault();
       input.focus();
     }
   });
 }
 
-// Run when page loads
+// =====================================================
+// START APP - Phase 8 + Phase 9
+// =====================================================
 document.addEventListener('DOMContentLoaded', function () {
-     openDB().then(function () {
-    console.log('Smart Duka ready - DB open');
-  }).catch(function (e) {
-    console.error('DB failed to open', e);
-  });
+  // 1. Theme - Dark by default, remember choice
   let savedTheme = 'dark';
   try {
     savedTheme = localStorage.getItem('smartduka-theme') || 'dark';
   } catch (e) { savedTheme = 'dark'; }
   applyTheme(savedTheme);
 
+  // 2. Greeting + Date
   updateGreeting();
   showTodayDate();
+
+  // 3. Global Search
   setupGlobalSearch();
 
+  // 4. Default dates in forms
   const ids = ['debt-date', 'loan-date', 'expense-date', 'report-from', 'report-to'];
   ids.forEach(function (id) {
     const el = document.getElementById(id);
     if (el && !el.value) el.value = getTodayISO();
   });
 
-  console.log('Smart Duka v3 - Centered Header + Global Search loaded');
+  // 5. Open DB (Phase 8) then load Products (Phase 9)
+  if (typeof openDB === 'function') {
+    openDB().then(function () {
+      console.log('Smart Duka ready - DB open');
+      // Load products after DB is open
+      if (typeof loadProducts === 'function') {
+        loadProducts();
+      }
+    }).catch(function (e) {
+      console.error('DB failed to open', e);
+      showToast('Database failed to open. Check console (F12).');
+    });
+  } else {
+    console.error('openDB not found - check js/db.js is loaded before app.js');
+  }
+
+  console.log('Smart Duka v3 + Phase 8 + Phase 9 loaded');
 });
