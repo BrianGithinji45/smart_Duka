@@ -1,10 +1,30 @@
 {
   "name": "Smart Duka - Shop Management",
   "short_name": "Smart Duka",
-  "description": "Offline-first shop management for kibandas and kiosks",
+  "description": "Shop Management for Kibandas & Kiosks - Offline First",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#0f7a4a",
-  "icons": []
+  "background_color": "#0f172a",
+  "theme_color": "#16a34a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
 }
